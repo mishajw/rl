@@ -211,9 +211,8 @@ class StepResult:
 
 
 def main():
-    results = run_simulations()
-    st.write(f"Found {len(results)} results")
-    df = pd.DataFrame(results)
+    df = run_simulations()
+    st.write(f"Found {len(df)} results")
     df = (
         df.groupby(["agent_name", "step"])[["reward", "is_action_optimal"]]
         .mean()
@@ -238,7 +237,8 @@ def main():
     st.write("Done")
 
 
-def run_simulations() -> List[StepResult]:
+@st.cache(suppress_st_warning=True)
+def run_simulations() -> pd.DataFrame:
     results = []
     bar = st.progress(0.0)
 
@@ -250,7 +250,8 @@ def run_simulations() -> List[StepResult]:
             results.extend(step_results)
             bar.progress(i / NUM_ITERATIONS)
     bar.progress(1.0)
-    return results
+    st.write("Finished, caching results")
+    return pd.DataFrame(results)
 
 
 def run_random_simulation(iteration: int) -> List[StepResult]:
