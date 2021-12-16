@@ -2,7 +2,7 @@ PYTHON_FILES := $(wildcard *.py)
 
 .PHONY: run
 run: .env $(PYTHON_FILES)
-	.env/bin/streamlit run main.py
+	.env/bin/streamlit run main.py --server.headless true
 
 .PHONY: fmt
 fmt: .env
