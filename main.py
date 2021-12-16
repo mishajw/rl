@@ -12,21 +12,60 @@ NUM_STEPS = 1000
 NUM_ARMS = 10
 
 
+class Environment(abc.ABC):
+    @abc.abstractmethod
+    def get_reward(self, action: int) -> float:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def get_optimal_action(self) -> float:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def update(self):
+        raise NotImplementedError()
+
+
 @dataclasses.dataclass
-class Environment:
+class StaticEnvironment(Environment):
     arm_means: np.array
     optimal_action: int
 
     @classmethod
     def random(cls) -> "Environment":
         arm_means = [random.gauss(0, 1) for _ in range(NUM_ARMS)]
-        return Environment(arm_means=arm_means, optimal_action=np.argmax(arm_means))
+        return StaticEnvironment(arm_means=arm_means, optimal_action=np.argmax(arm_means))
 
     def get_reward(self, action: int) -> float:
         return random.gauss(self.arm_means[action], 1)
 
     def get_optimal_action(self) -> int:
         return self.optimal_action
+
+    def update(self):
+        pass
+
+
+@dataclasses.dataclass
+class NonStationaryEnvironment(Environment):
+    arm_means: np.array
+    arm_trajectories: np.array
+
+    @classmethod
+    def random(cls) -> "NonStationaryEnvironment":
+        return NonStationaryEnvironment(
+            arm_means=[random.gauss(0, 1) for _ in range(NUM_ARMS)],
+            arm_trajectories=[random.gauss(0, 0.01) for _ in range(NUM_ARMS)],
+        )
+
+    def get_reward(self, action: int) -> float:
+        return random.gauss(self.arm_means[action], 1)
+
+    def get_optimal_action(self) -> float:
+        return np.argmax(self.arm_means)
+
+    def update(self):
+        self.arm_means += self.arm_trajectories
 
 
 class Agent(abc.ABC):
@@ -113,7 +152,7 @@ def run_simulations() -> pd.DataFrame:
     bar = st.progress(0.0)
     for iteration in range(NUM_ITERATIONS):
         bar.progress(iteration / NUM_ITERATIONS)
-        environment = Environment.random()
+        environment = NonStationaryEnvironment.random()
         agents = [
             Greedy.create(),
             EpsilonGreedy(Greedy.create(), epsilon=0.01),
@@ -136,6 +175,7 @@ def run_simulations() -> pd.DataFrame:
                         is_action_optimal=action == optimal_action,
                     )
                 )
+            environment.update()
     bar.progress(1.0)
     return pd.DataFrame(results)
 
