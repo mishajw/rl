@@ -1,8 +1,8 @@
 PYTHON_FILES := $(wildcard *.py)
 
-.PHONY: run
-run: .env $(PYTHON_FILES)
-	.env/bin/streamlit run main.py --server.headless true
+.PHONY: bandit_testbed
+bandit_testbed: .env $(PYTHON_FILES)
+	.env/bin/streamlit run bandit_testbed.py --server.headless true
 
 .PHONY: fmt
 fmt: .env

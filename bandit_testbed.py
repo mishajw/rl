@@ -1,3 +1,8 @@
+"""
+Implementation of models described in chapter 2 of this textbook:
+http://www.incompleteideas.net/book/the-book.html
+"""
+
 import abc
 import dataclasses
 import multiprocessing
