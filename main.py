@@ -33,7 +33,7 @@ class StaticEnvironment(Environment):
 
     @classmethod
     def random(cls) -> "Environment":
-        arm_means = [random.gauss(0, 1) for _ in range(NUM_ARMS)]
+        arm_means = np.random.normal(size=NUM_ARMS)
         return StaticEnvironment(arm_means=arm_means, optimal_action=np.argmax(arm_means))
 
     def get_reward(self, action: int) -> float:
@@ -54,8 +54,8 @@ class NonStationaryEnvironment(Environment):
     @classmethod
     def random(cls) -> "NonStationaryEnvironment":
         return NonStationaryEnvironment(
-            arm_means=[random.gauss(0, 1) for _ in range(NUM_ARMS)],
-            arm_trajectories=[random.gauss(0, 0.01) for _ in range(NUM_ARMS)],
+            arm_means=np.random.normal(size=NUM_ARMS),
+            arm_trajectories=np.random.normal(scale=0.01, size=NUM_ARMS),
         )
 
     def get_reward(self, action: int) -> float:
