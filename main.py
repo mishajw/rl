@@ -90,14 +90,13 @@ class Agent(abc.ABC):
 
 @dataclasses.dataclass()
 class Greedy(Agent):
+    initial_value: float = 0
     estimates: np.array = None
     num_actions: np.array = None
 
     def __post_init__(self):
-        if self.estimates is None:
-            self.estimates = np.ones(NUM_ARMS)
-        if self.num_actions is None:
-            self.num_actions = np.ones(NUM_ARMS)
+        self.estimates = np.ones(NUM_ARMS) * self.initial_value
+        self.num_actions = np.zeros(NUM_ARMS)
 
     def get_action(self) -> int:
         return np.argmax(self.estimates)
@@ -116,7 +115,7 @@ class Greedy(Agent):
         return 1 / self.num_actions[action]
 
     def name(self) -> str:
-        return "greedy"
+        return f"greedy, i={self.initial_value}"
 
 
 @dataclasses.dataclass()
@@ -127,7 +126,7 @@ class ConstStepSizeGreedy(Greedy):
         return self.coefficient
 
     def name(self) -> str:
-        return f"const greedy, c={self.coefficient}"
+        return f"const {super().name()}, c={self.coefficient}"
 
 
 @dataclasses.dataclass()
@@ -145,6 +144,21 @@ class EpsilonGreedy(Agent):
 
     def name(self) -> str:
         return f"epsilon {self.greedy.name()}, e={self.epsilon}"
+
+
+@dataclasses.dataclass()
+class UpperConfidenceBound(Greedy):
+    coefficient: float = 1
+
+    def get_action(self) -> int:
+        return np.argmax(
+            self.estimates
+            + self.coefficient
+            * np.sqrt(np.log(np.sum(self.num_actions)) / self.num_actions)
+        )
+
+    def name(self) -> str:
+        return f"ucb {super().name()}, c={self.coefficient}"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -188,16 +202,6 @@ def run_simulations() -> List[StepResult]:
     results = []
     bar = st.progress(0.0)
 
-    def run_random_simulation(iteration: int) -> List[StepResult]:
-        environment = NonStationaryEnvironment.random()
-        agents = [
-            Greedy(),
-            EpsilonGreedy(Greedy(), epsilon=0.1),
-            EpsilonGreedy(Greedy(), epsilon=0.01),
-            EpsilonGreedy(ConstStepSizeGreedy(coefficient=0.1), epsilon=0.1),
-        ]
-        return list(run_simulation(environment, agents, iteration))
-
     with multiprocessing.Pool(NUM_PROCESSES) as pool:
         iteration_results = pool.imap_unordered(
             run_random_simulation, range(NUM_ITERATIONS)
@@ -207,6 +211,20 @@ def run_simulations() -> List[StepResult]:
             bar.progress(i / NUM_ITERATIONS)
     bar.progress(1.0)
     return results
+
+
+def run_random_simulation(iteration: int) -> List[StepResult]:
+    # environment = NonStationaryEnvironment.random()
+    environment = StaticEnvironment.random()
+    agents = [
+        Greedy(),
+        Greedy(initial_value=3),
+        EpsilonGreedy(Greedy(), epsilon=0.1),
+        EpsilonGreedy(Greedy(), epsilon=0.01),
+        UpperConfidenceBound(coefficient=0.8),
+        EpsilonGreedy(ConstStepSizeGreedy(coefficient=0.1), epsilon=0.1),
+    ]
+    return list(run_simulation(environment, agents, iteration))
 
 
 def run_simulation(
