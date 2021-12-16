@@ -10,7 +10,7 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 
-NUM_ITERATIONS = 2000
+NUM_ITERATIONS = 200
 NUM_STEPS = 1000
 NUM_ARMS = 10
 NUM_PROCESSES = 64
