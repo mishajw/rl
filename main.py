@@ -13,6 +13,7 @@ import pandas as pd
 NUM_ITERATIONS = 2000
 NUM_STEPS = 1000
 NUM_ARMS = 10
+NUM_PROCESSES = 64
 
 
 class Environment(abc.ABC):
@@ -158,9 +159,8 @@ class StepResult:
 
 def main():
     results = run_simulations()
+    st.write(f"Found {len(results)} results")
     df = pd.DataFrame(results)
-    st.write(f"Found {len(df)} results")
-    st.write(df)
     df = (
         df.groupby(["agent_name", "step"])[["reward", "is_action_optimal"]]
         .mean()
@@ -184,22 +184,29 @@ def main():
     st.write("Done")
 
 
-@st.cache(suppress_st_warning=True)
 def run_simulations() -> List[StepResult]:
-    with multiprocessing.Pool(32) as pool:
-        results = pool.map(run_random_simulation, range(NUM_ITERATIONS))
-    return [result for inner in results for result in inner]
+    results = []
+    bar = st.progress(0.0)
 
+    def run_random_simulation(iteration: int) -> List[StepResult]:
+        environment = NonStationaryEnvironment.random()
+        agents = [
+            Greedy(),
+            EpsilonGreedy(Greedy(), epsilon=0.1),
+            EpsilonGreedy(Greedy(), epsilon=0.01),
+            EpsilonGreedy(ConstStepSizeGreedy(coefficient=0.1), epsilon=0.1),
+        ]
+        return list(run_simulation(environment, agents, iteration))
 
-def run_random_simulation(iteration: int) -> List[StepResult]:
-    environment = NonStationaryEnvironment.random()
-    agents = [
-        Greedy(),
-        EpsilonGreedy(Greedy(), epsilon=0.01),
-        EpsilonGreedy(Greedy(), epsilon=0.1),
-        EpsilonGreedy(ConstStepSizeGreedy(coefficient=0.1), epsilon=0.1),
-    ]
-    return list(run_simulation(environment, agents, iteration))
+    with multiprocessing.Pool(NUM_PROCESSES) as pool:
+        iteration_results = pool.imap_unordered(
+            run_random_simulation, range(NUM_ITERATIONS)
+        )
+        for i, step_results in enumerate(iteration_results):
+            results.extend(step_results)
+            bar.progress(i / NUM_ITERATIONS)
+    bar.progress(1.0)
+    return results
 
 
 def run_simulation(
