@@ -84,12 +84,14 @@ class Agent(abc.ABC):
 
 @dataclasses.dataclass()
 class Greedy(Agent):
-    estimates: np.array
-    num_actions: np.array
+    estimates: np.array = None
+    num_actions: np.array = None
 
-    @classmethod
-    def create(cls) -> "Greedy":
-        return Greedy(estimates=np.ones(NUM_ARMS), num_actions=np.ones(NUM_ARMS))
+    def __post_init__(self):
+        if self.estimates is None:
+            self.estimates = np.ones(NUM_ARMS)
+        if self.num_actions is None:
+            self.num_actions = np.ones(NUM_ARMS)
 
     def get_action(self) -> int:
         return np.argmax(self.estimates)
@@ -98,13 +100,26 @@ class Greedy(Agent):
         if self.num_actions[action] == 0:
             self.estimates[action] = reward
         else:
-            self.estimates[action] += (1 / self.num_actions[action]) * (
-                reward - self.estimates[action]
-            )
+            error = reward - self.estimates[action]
+            self.estimates[action] += self.get_update_coefficient(action) * error
         self.num_actions[action] += 1
+
+    def get_update_coefficient(self, action) -> float:
+        return 1 / self.num_actions[action]
 
     def title(self) -> str:
         return "greedy"
+
+
+@dataclasses.dataclass()
+class ConstStepSizeGreedy(Greedy):
+    coefficient: float = 0.1
+
+    def get_update_coefficient(self, _) -> float:
+        return self.coefficient
+
+    def title(self) -> str:
+        return f"const greedy, c={self.coefficient}"
 
 
 @dataclasses.dataclass()
@@ -121,7 +136,7 @@ class EpsilonGreedy(Agent):
         self.greedy.update(action, reward)
 
     def title(self) -> str:
-        return f"epsilon greedy ({self.epsilon})"
+        return f"epsilon {self.greedy.title()}, e={self.epsilon}"
 
 
 def main():
@@ -154,9 +169,10 @@ def run_simulations() -> pd.DataFrame:
         bar.progress(iteration / NUM_ITERATIONS)
         environment = NonStationaryEnvironment.random()
         agents = [
-            Greedy.create(),
-            EpsilonGreedy(Greedy.create(), epsilon=0.01),
-            EpsilonGreedy(Greedy.create(), epsilon=0.1),
+            Greedy(),
+            EpsilonGreedy(Greedy(), epsilon=0.01),
+            EpsilonGreedy(Greedy(), epsilon=0.1),
+            EpsilonGreedy(ConstStepSizeGreedy(coefficient=0.1), epsilon=0.1),
         ]
 
         for step in range(NUM_STEPS):
