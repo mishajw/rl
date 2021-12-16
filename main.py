@@ -1,6 +1,9 @@
 import abc
 import dataclasses
+import multiprocessing
 import random
+from typing import List, Iterable
+
 import streamlit as st
 import seaborn as sns
 
@@ -78,7 +81,7 @@ class Agent(abc.ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def title(self) -> str:
+    def name(self) -> str:
         raise NotImplementedError()
 
 
@@ -107,7 +110,7 @@ class Greedy(Agent):
     def get_update_coefficient(self, action) -> float:
         return 1 / self.num_actions[action]
 
-    def title(self) -> str:
+    def name(self) -> str:
         return "greedy"
 
 
@@ -118,7 +121,7 @@ class ConstStepSizeGreedy(Greedy):
     def get_update_coefficient(self, _) -> float:
         return self.coefficient
 
-    def title(self) -> str:
+    def name(self) -> str:
         return f"const greedy, c={self.coefficient}"
 
 
@@ -135,65 +138,80 @@ class EpsilonGreedy(Agent):
     def update(self, action: int, reward: float):
         self.greedy.update(action, reward)
 
-    def title(self) -> str:
-        return f"epsilon {self.greedy.title()}, e={self.epsilon}"
+    def name(self) -> str:
+        return f"epsilon {self.greedy.name()}, e={self.epsilon}"
+
+
+@dataclasses.dataclass(frozen=True)
+class StepResult:
+    agent_name: str
+    action: int
+    reward: float
+    is_action_optimal: bool
+    step: int
+    iteration: int
 
 
 def main():
-    df = run_simulations()
+    results = run_simulations()
+    df = pd.DataFrame(results)
     st.write(f"Found {len(df)} results")
-    df = df.groupby(["agent", "step"])[["reward", "is_action_optimal"]].mean().reset_index()
+    st.write(df)
+    df = df.groupby(["agent_name", "step"])[["reward", "is_action_optimal"]].mean().reset_index()
 
     sns.lineplot(
         data=df,
         x="step",
         y="reward",
-        hue="agent",
+        hue="agent_name",
     )
     st.pyplot()
     sns.lineplot(
         data=df,
         x="step",
         y="is_action_optimal",
-        hue="agent",
+        hue="agent_name",
     )
     st.pyplot()
     st.write("Done")
 
 
 @st.cache(suppress_st_warning=True)
-def run_simulations() -> pd.DataFrame:
-    results = []
-    bar = st.progress(0.0)
-    for iteration in range(NUM_ITERATIONS):
-        bar.progress(iteration / NUM_ITERATIONS)
-        environment = NonStationaryEnvironment.random()
-        agents = [
-            Greedy(),
-            EpsilonGreedy(Greedy(), epsilon=0.01),
-            EpsilonGreedy(Greedy(), epsilon=0.1),
-            EpsilonGreedy(ConstStepSizeGreedy(coefficient=0.1), epsilon=0.1),
-        ]
+def run_simulations() -> List[StepResult]:
+    with multiprocessing.Pool(32) as pool:
+        results = pool.map(run_random_simulation, range(NUM_ITERATIONS))
+    return [result for inner in results for result in inner]
 
-        for step in range(NUM_STEPS):
-            optimal_action = environment.get_optimal_action()
-            for agent in agents:
-                action = agent.get_action()
-                reward = environment.get_reward(action)
-                agent.update(action, reward)
-                results.append(
-                    dict(
-                        agent=agent.title(),
-                        action=action,
-                        reward=reward,
-                        step=step,
-                        iteration=iteration,
-                        is_action_optimal=action == optimal_action,
-                    )
-                )
-            environment.update()
-    bar.progress(1.0)
-    return pd.DataFrame(results)
+
+def run_random_simulation(iteration: int) -> List[StepResult]:
+    environment = NonStationaryEnvironment.random()
+    agents = [
+        Greedy(),
+        EpsilonGreedy(Greedy(), epsilon=0.01),
+        EpsilonGreedy(Greedy(), epsilon=0.1),
+        EpsilonGreedy(ConstStepSizeGreedy(coefficient=0.1), epsilon=0.1),
+    ]
+    return list(run_simulation(environment, agents, iteration))
+
+
+def run_simulation(
+    environment: Environment, agents: List[Agent], iteration: int
+) -> Iterable[StepResult]:
+    for step in range(NUM_STEPS):
+        optimal_action = environment.get_optimal_action()
+        for agent in agents:
+            action = agent.get_action()
+            reward = environment.get_reward(action)
+            agent.update(action, reward)
+            yield StepResult(
+                agent_name=agent.name(),
+                action=action,
+                reward=reward,
+                is_action_optimal=action == optimal_action,
+                step=step,
+                iteration=iteration,
+            )
+        environment.update()
 
 
 if __name__ == "__main__":
