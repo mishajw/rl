@@ -213,11 +213,7 @@ class StepResult:
 def main():
     df = run_simulations()
     st.write(f"Found {len(df)} results")
-    df = (
-        df.groupby(["agent_name", "step"])[["reward", "is_action_optimal"]]
-        .mean()
-        .reset_index()
-    )
+    df["step"] = (df["step"] // 10) * 10
     st.write(f"Joined to {len(df)} rows")
 
     sns.lineplot(
