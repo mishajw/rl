@@ -151,14 +151,53 @@ class UpperConfidenceBound(Greedy):
     coefficient: float = 1
 
     def get_action(self) -> int:
+        if np.sum(self.num_actions) == 0:
+            return 0
+        # TODO: Remove +0.01 hack.
         return np.argmax(
             self.estimates
             + self.coefficient
-            * np.sqrt(np.log(np.sum(self.num_actions)) / self.num_actions)
+            * np.sqrt(
+                np.log(np.sum(self.num_actions)) / (self.num_actions + 0.01)
+            )
         )
 
     def name(self) -> str:
         return f"ucb {super().name()}, c={self.coefficient}"
+
+
+@dataclasses.dataclass()
+class Gradient(Agent):
+    learning_rate: float = 0.1
+    preferences: np.array = np.empty(0)
+    reward_sums: float = 0
+    num_rewards: int = 0
+
+    def __post_init__(self):
+        self.preferences = np.ones(NUM_ARMS)
+
+    def get_action(self) -> int:
+        return np.random.choice(NUM_ARMS, p=self._get_probabilities())
+
+    def update(self, action: int, reward: float):
+        reward_mean = (
+            self.reward_sums / self.num_rewards if self.num_rewards > 0 else 1
+        )
+
+        self.preferences += (
+            self.learning_rate
+            * (reward - reward_mean)
+            * ((np.arange(0, NUM_ARMS) == action) - self._get_probabilities())
+        )
+        self.reward_sums += reward
+        self.num_rewards += 1
+
+    def _get_probabilities(self) -> np.array:
+        preferences_exp = np.exp(self.preferences)
+        return preferences_exp / np.sum(preferences_exp)
+
+    def name(self) -> str:
+        return f"gradient, lr={self.learning_rate}"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -180,6 +219,7 @@ def main():
         .mean()
         .reset_index()
     )
+    st.write(f"Joined to {len(df)} rows")
 
     sns.lineplot(
         data=df,
@@ -223,6 +263,9 @@ def run_random_simulation(iteration: int) -> List[StepResult]:
         EpsilonGreedy(Greedy(), epsilon=0.01),
         UpperConfidenceBound(coefficient=0.8),
         EpsilonGreedy(ConstStepSizeGreedy(coefficient=0.1), epsilon=0.1),
+        Gradient(learning_rate=0.1),
+        Gradient(learning_rate=0.05),
+        Gradient(learning_rate=0.01),
     ]
     return list(run_simulation(environment, agents, iteration))
 
