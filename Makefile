@@ -6,7 +6,7 @@ run: .env $(PYTHON_FILES)
 
 .PHONY: fmt
 fmt: .env
-	.env/bin/black --line-length 100 $(PYTHON_FILES)
+	.env/bin/black --line-length 80 $(PYTHON_FILES)
 
 .env: requirements.txt
 	python -m venv .env

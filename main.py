@@ -37,7 +37,9 @@ class StaticEnvironment(Environment):
     @classmethod
     def random(cls) -> "Environment":
         arm_means = np.random.normal(size=NUM_ARMS)
-        return StaticEnvironment(arm_means=arm_means, optimal_action=np.argmax(arm_means))
+        return StaticEnvironment(
+            arm_means=arm_means, optimal_action=np.argmax(arm_means)
+        )
 
     def get_reward(self, action: int) -> float:
         return random.gauss(self.arm_means[action], 1)
@@ -104,7 +106,9 @@ class Greedy(Agent):
             self.estimates[action] = reward
         else:
             error = reward - self.estimates[action]
-            self.estimates[action] += self.get_update_coefficient(action) * error
+            self.estimates[action] += (
+                self.get_update_coefficient(action) * error
+            )
         self.num_actions[action] += 1
 
     def get_update_coefficient(self, action) -> float:
@@ -157,7 +161,11 @@ def main():
     df = pd.DataFrame(results)
     st.write(f"Found {len(df)} results")
     st.write(df)
-    df = df.groupby(["agent_name", "step"])[["reward", "is_action_optimal"]].mean().reset_index()
+    df = (
+        df.groupby(["agent_name", "step"])[["reward", "is_action_optimal"]]
+        .mean()
+        .reset_index()
+    )
 
     sns.lineplot(
         data=df,
